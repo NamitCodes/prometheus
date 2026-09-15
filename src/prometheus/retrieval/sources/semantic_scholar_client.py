@@ -2,7 +2,7 @@
 Semantic Scholar Academic Graph API client.
 
 GET https://api.semanticscholar.org/graph/v1/paper/search. Uses
-SEMANTIC_SCHOLAR_API_KEY (settings.semantic_scholar_api_key) if set, for a
+SEMANTIC_SCHOLAR_API_KEY (settings.SEMANTIC_SCHOLAR_API_KEY) if set, for a
 higher rate limit.
 """
 from __future__ import annotations
@@ -18,8 +18,8 @@ _FIELDS = "title,abstract,year,authors,externalIds,url,openAccessPdf"
 
 def search_semantic_scholar(query: str, max_results: int = 20) -> list[PaperRecord]:
     headers = {"User-Agent": "prometheus-research-agent/0.1 (mailto:research@example.com)"}
-    if settings.semantic_scholar_api_key:
-        headers["x-api-key"] = settings.semantic_scholar_api_key
+    if settings.SEMANTIC_SCHOLAR_API_KEY:
+        headers["x-api-key"] = settings.SEMANTIC_SCHOLAR_API_KEY
 
     params = {"query": query, "limit": max_results, "fields": _FIELDS}
     response = httpx.get(SEMANTIC_SCHOLAR_API_URL, params=params, headers=headers, timeout=30.0)

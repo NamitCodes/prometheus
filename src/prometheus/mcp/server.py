@@ -8,10 +8,12 @@ TODO:
       wraps prometheus.retrieval.hybrid_search.hybrid_search
   - save_report(report: dict) -> str
       wraps prometheus.findings.repository.save_report
-  - Register both as MCP tools and serve on settings.mcp_server_port
+  - Register both as MCP tools and serve on settings.MCP_SERVER_PORT
 """
 from __future__ import annotations
 
+from typing import Any
 
-def create_mcp_server() -> Any:  # noqa: F821 - Any imported lazily once mcp SDK is wired in
+
+def create_mcp_server() -> Any:
     raise NotImplementedError("Phase 4: implement MCP server + tool registration")

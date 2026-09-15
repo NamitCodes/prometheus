@@ -1,6 +1,6 @@
 """
 Vector store wrapper -- abstracts over ChromaDB / Qdrant so the rest of the
-codebase doesn't care which backend is configured (see Settings.vector_db_backend).
+codebase doesn't care which backend is configured (see Settings.VECTOR_DB_BACKEND).
 
 Chroma is the Phase 0-2 default (local, zero-infra). Qdrant support is
 deferred until scaling/deployment needs it (see docs/architecture.md).
@@ -70,15 +70,15 @@ _vector_store: VectorStore | None = None
 
 
 def get_vector_store() -> VectorStore:
-    """Factory: returns Chroma or Qdrant impl based on settings.vector_db_backend."""
+    """Factory: returns Chroma or Qdrant impl based on settings.VECTOR_DB_BACKEND."""
     global _vector_store
     if _vector_store is not None:
         return _vector_store
 
-    if settings.vector_db_backend == "chroma":
-        _vector_store = ChromaVectorStore(settings.chroma_persist_dir)
-    elif settings.vector_db_backend == "qdrant":
+    if settings.VECTOR_DB_BACKEND == "chroma":
+        _vector_store = ChromaVectorStore(settings.CHROMA_PERSIST_DIR)
+    elif settings.VECTOR_DB_BACKEND == "qdrant":
         raise NotImplementedError("Qdrant backend not implemented yet; set VECTOR_DB_BACKEND=chroma")
     else:
-        raise ValueError(f"Unknown VECTOR_DB_BACKEND: {settings.vector_db_backend!r}")
+        raise ValueError(f"Unknown VECTOR_DB_BACKEND: {settings.VECTOR_DB_BACKEND!r}")
     return _vector_store

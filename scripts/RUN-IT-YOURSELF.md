@@ -45,8 +45,8 @@ signal you're not overclaiming status.
 
 ```bash
 rm -rf /tmp/demo_chroma
-CHROMA_PERSIST_DIR=/tmp/demo_chroma python scripts/ingest_papers.py \
-  --query "retrieval augmented generation" --max-results 3 --sources openalex
+CHROMA_PERSIST_DIR=/tmp/demo_chroma 
+uv run python scripts/ingest_papers.py --query "retrieval augmented generation" --max-results 3 --sources openalex
 ```
 
 Narrate while it runs: fetches metadata from OpenAlex → dedupes across
@@ -63,10 +63,8 @@ the first one returns thin results:
 If you want to show arXiv/Semantic Scholar live too:
 
 ```bash
-python scripts/ingest_papers.py --query "retrieval augmented generation" \
-  --max-results 3 --sources arxiv
-python scripts/ingest_papers.py --query "retrieval augmented generation" \
-  --max-results 3 --sources semantic_scholar
+uv run python scripts/ingest_papers.py --query "retrieval augmented generation" --max-results 3 --sources arxiv
+uv run python scripts/ingest_papers.py --query "retrieval augmented generation" --max-results 3 --sources semantic_scholar
 ```
 
 Mention their stricter/keyed rate limits rather than risk a live failure —
@@ -75,7 +73,8 @@ that's an honest, not a weak, thing to say if one of them 429s.
 ## 5. Live: query it back out (1–2 min)
 
 ```bash
-CHROMA_PERSIST_DIR=/tmp/demo_chroma python -c "
+CHROMA_PERSIST_DIR=/tmp/demo_chroma 
+uv run python -c "
 from prometheus.retrieval.hybrid_search import hybrid_search
 from prometheus.retrieval.reranker import rerank, apply_recency_and_credibility_filters
 
@@ -98,7 +97,7 @@ recency/source-credibility scoring, on papers pulled live seconds ago.
 **Show routing logic too** — the Retriever's store-selection heuristic:
 
 ```bash
-python -c "
+uv run python -c "
 from prometheus.retrieval.hybrid_search import route
 print(route('have we looked at retrieval-augmented generation before?'))
 print(route('what is the effect of chunk size on retrieval quality?'))
@@ -112,13 +111,15 @@ second is just `['paper_corpus', 'domain_docs']`.
 
 ```bash
 rm -f /tmp/demo_findings.db
-DATABASE_URL="sqlite:////tmp/demo_findings.db" python scripts/seed_findings_db.py --with-sample-data
+DATABASE_URL="sqlite:////tmp/demo_findings.db" 
+uv run python scripts/seed_findings_db.py --with-sample-data
 ```
 
 Then show it's queryable:
 
 ```bash
-DATABASE_URL="sqlite:////tmp/demo_findings.db" python -c "
+DATABASE_URL="sqlite:////tmp/demo_findings.db" 
+uv run python -c "
 from prometheus.findings import repository as repo
 for r in repo.search_findings('retrieval'):
     print(r.status, '-', r.question)
@@ -151,8 +152,8 @@ rate-limited API.
 |---|---|
 | Lint | `ruff check .` |
 | Tests | `pytest -v` |
-| Ingest papers | `python scripts/ingest_papers.py --query "..." --max-results N` |
-| Seed Findings DB | `python scripts/seed_findings_db.py --with-sample-data` |
+| Ingest papers | `uv run python scripts/ingest_papers.py --query "..." --max-results N` |
+| Seed Findings DB | `uv run python scripts/seed_findings_db.py --with-sample-data` |
 | Query retrieval | see section 5 above |
 | Query Findings DB | see section 6 above |
 

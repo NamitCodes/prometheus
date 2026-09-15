@@ -1,7 +1,7 @@
 """
 OpenAlex API client (free, no key -- use the "polite pool" via mailto).
 
-GET https://api.openalex.org/works?search=...&mailto=<settings.openalex_mailto>
+GET https://api.openalex.org/works?search=...&mailto=<settings.OPENALEX_MAILTO>
 """
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ OPENALEX_API_URL = "https://api.openalex.org/works"
 
 def search_openalex(query: str, max_results: int = 20) -> list[PaperRecord]:
     params = {"search": query, "per_page": max_results}
-    if settings.openalex_mailto:
-        params["mailto"] = settings.openalex_mailto
+    if settings.OPENALEX_MAILTO:
+        params["mailto"] = settings.OPENALEX_MAILTO
 
     response = httpx.get(OPENALEX_API_URL, params=params, timeout=30.0)
     response.raise_for_status()

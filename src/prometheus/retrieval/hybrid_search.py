@@ -30,7 +30,7 @@ _RECALL_PATTERNS = re.compile(
 
 
 def _bm25_index_path() -> Path:
-    path = Path(settings.chroma_persist_dir) / "bm25_index.jsonl"
+    path = Path(settings.CHROMA_PERSIST_DIR) / "bm25_index.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
