@@ -95,12 +95,30 @@ prometheus/
 
 ## Getting started
 
+#### 1. Install [`uv`](https://docs.astral.sh/uv/) package manager, if not already installed:
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env   # fill in ANTHROPIC_API_KEY at minimum
+pip install uv
 ```
 
+#### 2. Create and activate a virtual environment:
+```bash
+uv sync   # installs dependencies from pyproject.toml
+
+source .venv/Scripts/activate  # on Windows
+
+source .venv/bin/activate      # on Linux/Mac
+```
+
+#### 3. Environment Variables
+```bash
+cp .env.example .env   # fill in OPENROUTER_API_KEY at minimum
+```
+
+#### 4. Verify
+```bash
+uv run ruff check .   # lints the code
+pytest                # runs tests
+```
 Nothing is runnable end-to-end yet — start with Phase 0 below.
 
 ---
@@ -115,7 +133,7 @@ before the agents it calls (Phase 2) at least run standalone.
 ### Phase 0 — Foundations
 *Goal: a repo that installs, lints, and has a CI heartbeat, plus the config/observability plumbing everything else depends on.*
 
-- [ ] Pin dependency versions in `pyproject.toml`, confirm `pip install -e ".[dev]"` works clean
+- [ ] Use `uv` package project manager and pyproject.toml for dependencies and environments
 - [ ] Decide vector store backend for local dev (default: Chroma, per `config.py`)
 - [ ] Stand up Postgres or confirm SQLite is sufficient for early phases
 - [ ] Wire up LangSmith tracing (`LANGSMITH_API_KEY`) so every later phase gets observability for free
@@ -125,15 +143,15 @@ before the agents it calls (Phase 2) at least run standalone.
 ### Phase 1 — Data layer & retrieval
 *Goal: given a query, get back reranked, provenance-tagged evidence from all four stores. No agents yet — this is plumbing.*
 
-- [ ] `retrieval/sources/`: implement arXiv, Semantic Scholar, OpenAlex clients; normalize to one `PaperRecord` shape
-- [ ] `retrieval/ingestion.py`: PDF parsing (PyMuPDF), chunking strategy, embedding model choice
-- [ ] `retrieval/vector_store.py`: Chroma implementation first; Qdrant behind the same interface
-- [ ] BM25 index alongside the vector store, kept in sync with ingestion
-- [ ] `retrieval/reranker.py`: pick + pin a cross-encoder; implement recency/source-credibility filtering
-- [ ] `retrieval/hybrid_search.py`: merge BM25 + dense results, implement store-routing logic
-- [ ] `findings/models.py` + `findings/repository.py`: schema for reports/claims/reasoning-chains, basic save/search
-- [ ] `scripts/ingest_papers.py` and `scripts/seed_findings_db.py`: make the pipeline runnable from the CLI
-- [ ] Tests in `tests/test_retrieval.py` actually passing (currently skipped stubs)
+- [x] `retrieval/sources/`: implement arXiv, Semantic Scholar, OpenAlex clients; normalize to one `PaperRecord` shape
+- [x] `retrieval/ingestion.py`: PDF parsing (PyMuPDF), chunking strategy, embedding model choice
+- [x] `retrieval/vector_store.py`: Chroma implementation first; Qdrant behind the same interface
+- [x] BM25 index alongside the vector store, kept in sync with ingestion
+- [x] `retrieval/reranker.py`: pick + pin a cross-encoder; implement recency/source-credibility filtering
+- [x] `retrieval/hybrid_search.py`: merge BM25 + dense results, implement store-routing logic
+- [x] `findings/models.py` + `findings/repository.py`: schema for reports/claims/reasoning-chains, basic save/search
+- [x] `scripts/ingest_papers.py` and `scripts/seed_findings_db.py`: make the pipeline runnable from the CLI
+- [x] Tests in `tests/test_retrieval.py` actually passing (currently skipped stubs)
 
 ### Phase 2 — Agents, standalone
 *Goal: each agent works correctly in isolation on fixed/sample inputs, before any graph wiring. This is where prompt quality gets sorted out.*
