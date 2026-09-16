@@ -17,11 +17,12 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "prometheus"
     LANGSMITH_TRACING: bool = True
 
-    # Vector store
-    VECTOR_DB_BACKEND: Literal["chroma", "qdrant"] = "chroma"
-    CHROMA_PERSIST_DIR: str = "./chroma_data"
-    QDRANT_URL: str = "http://localhost:6333"
-    QDRANT_API_KEY: str
+
+@dataclass(frozen=True)
+class Settings:
+    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+    openrouter_base_url: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
     # Relational store
     DATABASE_URL: str = "sqlite:///./findings.db"
