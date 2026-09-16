@@ -10,22 +10,24 @@ prometheus.retrieval.hybrid_search, once report volume justifies it.
 """
 from __future__ import annotations
 
-from sqlalchemy import create_engine, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import select, or_
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from prometheus.config import settings
 from prometheus.findings.models import Base, Claim, Objection, ReasoningStep, Report
 
-_engine = create_engine(settings.database_url)
+engine = create_async_engine(settings.DATABASE_URL)
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-def init_db() -> None:
-    Base.metadata.create_all(_engine)
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-def save_report(report: dict) -> str:
+async def save_report(report: dict) -> str:
     """report: {question, summary, status?, claims?: [{statement, confidence_level, supporting_evidence_ids}]}"""
-    with Session(_engine) as session:
+    async with AsyncSessionLocal() as session:
         row = Report(
             question=report["question"],
             summary=report.get("summary", ""),
@@ -40,30 +42,31 @@ def save_report(report: dict) -> str:
                 )
             )
         session.add(row)
-        session.commit()
+        await session.commit()
         return row.id
 
 
-def get_report(report_id: str) -> Report | None:
-    with Session(_engine) as session:
+async def get_report(report_id: str) -> Report | None:
+    async with AsyncSessionLocal() as session:
         return session.get(Report, report_id)
 
 
-def search_findings(query: str, top_k: int = 10) -> list[Report]:
+async def search_findings(query: str, top_k: int = 10) -> list[Report]:
     like = f"%{query}%"
-    with Session(_engine) as session:
+    async with AsyncSessionLocal() as session:
         stmt = (
-            session.query(Report)
+            select(Report)
             .filter(or_(Report.question.ilike(like), Report.summary.ilike(like)))
             .order_by(Report.created_at.desc())
             .limit(top_k)
         )
-        return list(stmt)
+        result = await session.execute(stmt)
+        return result.scalars().all()
 
 
-def save_reasoning_chain(report_id: str, steps: list[dict]) -> None:
+async def save_reasoning_chain(report_id: str, steps: list[dict]) -> None:
     """steps: [{agent_role, input, output}]"""
-    with Session(_engine) as session:
+    async with AsyncSessionLocal() as session:
         for step in steps:
             session.add(
                 ReasoningStep(
@@ -73,12 +76,12 @@ def save_reasoning_chain(report_id: str, steps: list[dict]) -> None:
                     output=step["output"],
                 )
             )
-        session.commit()
+        await session.commit()
 
 
-def save_objection(report_id: str, objection: dict) -> str:
+async def save_objection(report_id: str, objection: dict) -> str:
     """objection: {issue_type, explanation, claim_id?, resolved?}"""
-    with Session(_engine) as session:
+    async with AsyncSessionLocal() as session:
         row = Objection(
             report_id=report_id,
             claim_id=objection.get("claim_id"),
@@ -87,5 +90,5 @@ def save_objection(report_id: str, objection: dict) -> str:
             resolved=objection.get("resolved", False),
         )
         session.add(row)
-        session.commit()
+        await session.commit()
         return row.id

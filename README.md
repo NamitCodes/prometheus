@@ -95,12 +95,30 @@ prometheus/
 
 ## Getting started
 
+#### 1. Install [`uv`](https://docs.astral.sh/uv/) package manager, if not already installed:
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install uv
+```
+
+#### 2. Create and activate a virtual environment:
+```bash
+uv sync   # installs dependencies from pyproject.toml
+
+source .venv/Scripts/activate  # on Windows
+
+source .venv/bin/activate      # on Linux/Mac
+```
+
+#### 3. Environment Variables
+```bash
 cp .env.example .env   # fill in OPENROUTER_API_KEY at minimum
 ```
 
+#### 4. Verify
+```bash
+uv run ruff check .   # lints the code
+pytest                # runs tests
+```
 Nothing is runnable end-to-end yet — start with Phase 0 below.
 
 ---
@@ -115,7 +133,7 @@ before the agents it calls (Phase 2) at least run standalone.
 ### Phase 0 — Foundations
 *Goal: a repo that installs, lints, and has a CI heartbeat, plus the config/observability plumbing everything else depends on.*
 
-- [ ] Pin dependency versions in `pyproject.toml`, confirm `pip install -e ".[dev]"` works clean
+- [ ] Use `uv` package project manager and pyproject.toml for dependencies and environments
 - [ ] Decide vector store backend for local dev (default: Chroma, per `config.py`)
 - [ ] Stand up Postgres or confirm SQLite is sufficient for early phases
 - [ ] Wire up LangSmith tracing (`LANGSMITH_API_KEY`) so every later phase gets observability for free

@@ -1,19 +1,21 @@
-"""
-Central configuration for Prometheus.
+"""Central configuration for Prometheus"""
 
-Loads settings from environment variables (see .env.example) and exposes
-a single Settings object that every module should import from, instead of
-calling os.environ directly. This keeps config swaps (e.g. Chroma -> Qdrant,
-SQLite -> Postgres) to a single file.
-"""
-from __future__ import annotations
+from functools import lru_cache
+from typing import Literal
 
-import os
-from dataclasses import dataclass
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from dotenv import load_dotenv
 
-load_dotenv()
+class Settings(BaseSettings):
+    # LLM (via OpenRouter, OpenAI-compatible API)
+    OPENROUTER_API_KEY: str
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str
+
+    # Observability
+    LANGSMITH_API_KEY: str
+    LANGSMITH_PROJECT: str = "prometheus"
+    LANGSMITH_TRACING: bool = True
 
 
 @dataclass(frozen=True)
@@ -22,23 +24,31 @@ class Settings:
     openrouter_base_url: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     openrouter_model: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
-    langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "prometheus")
-    langsmith_tracing: bool = os.getenv("LANGSMITH_TRACING", "true").lower() == "true"
+    # Relational store
+    DATABASE_URL: str = "sqlite:///./findings.db"
 
-    vector_db_backend: str = os.getenv("VECTOR_DB_BACKEND", "chroma")
-    chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
-    qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    # External paper sources
+    SEMANTIC_SCHOLAR_API_KEY: str
+    OPENALEX_MAILTO: str
 
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./findings.db")
-
-    semantic_scholar_api_key: str = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
-    openalex_mailto: str = os.getenv("OPENALEX_MAILTO", "")
-
-    mcp_server_port: int = int(os.getenv("MCP_SERVER_PORT", "8765"))
+    # MCP server
+    MCP_SERVER_PORT: int = 8765
 
     # Per-role model / temperature overrides (Phase 3 tuning target).
     # TODO: move to a per-agent config dict once role tuning starts,
     # e.g. {"planner": {"model": "claude-...", "temperature": 0.7}, ...}
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
-settings = Settings()
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

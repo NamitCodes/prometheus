@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 
 from prometheus.findings import repository
 
@@ -48,19 +49,19 @@ _SAMPLE_REPORTS = [
 ]
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--with-sample-data", action="store_true")
     args = parser.parse_args()
 
-    repository.init_db()
+    await repository.init_db()
     print("Findings DB schema created.")
 
     if args.with_sample_data:
         for report in _SAMPLE_REPORTS:
-            report_id = repository.save_report(report)
+            report_id = await repository.save_report(report)
             print(f"seeded report {report_id}: {report['question'][:60]}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
