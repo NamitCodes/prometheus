@@ -51,15 +51,47 @@ def add_to_bm25(chunks: list[dict]) -> None:
 
 
 def _load_bm25_corpus() -> list[dict]:
+    """Load BM25 corpus from disk, deduplicating by (document_id, chunk_index).
+
+    The JSONL file is append-only — re-ingesting the same document adds new
+    entries without removing old ones.  We keep only the *last* record seen
+    for each (document_id, chunk_index) key so stale entries from previous
+    runs don't pollute the index.
+    """
     path = _bm25_index_path()
     if not path.exists():
         return []
+    seen: dict[tuple, dict] = {}  # key -> last-seen record
     with path.open(encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            meta = record.get("metadata", {})
+            # Stable fingerprint: prefer (document_id, chunk_index); fall back
+            # to the chunk id so that records without metadata are still kept.
+            key: tuple = (
+                meta.get("document_id", ""),
+                meta.get("chunk_index", record.get("id", "")),
+            )
+            seen[key] = record
+    return list(seen.values())
 
 
-def bm25_search(query: str, top_k: int = 20) -> list[dict]:
+def _matches_filters(metadata: dict, filters: dict | None) -> bool:
+    if not filters:
+        return True
+    for key, val in filters.items():
+        if metadata.get(key) != val:
+            return False
+    return True
+
+
+def bm25_search(query: str, top_k: int = 20, filters: dict | None = None) -> list[dict]:
     corpus = _load_bm25_corpus()
+    if filters:
+        corpus = [doc for doc in corpus if _matches_filters(doc.get("metadata", {}), filters)]
     if not corpus:
         return []
 
@@ -88,8 +120,13 @@ def dense_search(query: str, top_k: int = 20, filters: dict | None = None) -> li
 
 
 def hybrid_search(query: str, top_k: int = 20, filters: dict | None = None) -> list[dict]:
-    """Merges BM25 + dense candidates via reciprocal rank fusion, deduped by id."""
-    bm25_hits = bm25_search(query, top_k=top_k)
+    """Merges BM25 + dense candidates via reciprocal rank fusion, deduped by id.
+
+    A secondary deduplication pass by content hash guards against the case
+    where two chunks with different UUIDs carry identical text (e.g. a file
+    that was ingested twice via different code paths).
+    """
+    bm25_hits = bm25_search(query, top_k=top_k, filters=filters)
     dense_hits = dense_search(query, top_k=top_k, filters=filters)
 
     rrf_scores: dict[str, float] = {}
@@ -104,7 +141,18 @@ def hybrid_search(query: str, top_k: int = 20, filters: dict | None = None) -> l
     merged = sorted(by_id.values(), key=lambda hit: rrf_scores[hit["id"]], reverse=True)
     for hit in merged:
         hit["score"] = rrf_scores[hit["id"]]
-    return merged[:top_k]
+
+    # Secondary pass: drop chunks whose text is identical to a higher-ranked chunk.
+    seen_text: set[int] = set()
+    deduped: list[dict] = []
+    for hit in merged:
+        text_hash = hash(hit.get("text", "").strip())
+        if text_hash not in seen_text:
+            seen_text.add(text_hash)
+            deduped.append(hit)
+
+    return deduped[:top_k]
+
 
 
 def route(sub_question: str) -> list[str]:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pymupdf
 from sentence_transformers import SentenceTransformer
@@ -89,12 +90,82 @@ def _make_chunk_records(texts: list[str], metadata: dict) -> list[dict]:
     ]
 
 
+def chunk_sections(sections: list[Any], size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[dict]:
+    """Chunk a sequence of DocumentSections, preserving location metadata (page/slide numbers)."""
+    chunk_dicts: list[dict] = []
+    for section in sections:
+        text = section.text.strip()
+        if not text:
+            continue
+        text_chunks = chunk(text, size=size, overlap=overlap)
+        for t in text_chunks:
+            meta = {
+                "page_number": getattr(section, "page_number", None),
+                "slide_number": getattr(section, "slide_number", None),
+                "heading": getattr(section, "heading", None),
+                "section_type": getattr(section, "section_type", "text"),
+            }
+            chunk_dicts.append({"text": t, **meta})
+    return chunk_dicts
+
+
+def ingest_document(
+    path: str,
+    document_id: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """Ingest any supported document (.pdf, .docx, .pptx, .txt) into vector store and BM25.
+
+    Returns the document_id used.
+    """
+    from prometheus.retrieval.parsers import parse_document
+
+    parsed = parse_document(path, document_id=document_id)
+    doc_id = parsed.document_id
+
+    # Chunk while preserving page/slide numbers
+    section_chunks = chunk_sections(parsed.sections)
+    if not section_chunks:
+        return doc_id
+
+    texts = [sc["text"] for sc in section_chunks]
+    embeddings = embed(texts)
+    ingested_at = datetime.now(UTC).isoformat()
+
+    records = []
+    for idx, (sc, emb) in enumerate(zip(section_chunks, embeddings)):
+        chunk_meta = {
+            "document_id": doc_id,
+            "filename": parsed.filename,
+            "file_type": parsed.file_type,
+            "page_number": sc.get("page_number"),
+            "slide_number": sc.get("slide_number"),
+            "heading": sc.get("heading"),
+            "chunk_index": idx,
+            "ingested_at": ingested_at,
+            "url": str(path),
+            **(metadata or {}),
+        }
+        records.append(
+            {
+                "id": str(uuid.uuid4()),
+                "text": sc["text"],
+                "embedding": emb,
+                "metadata": chunk_meta,
+            }
+        )
+
+    get_vector_store().add(records)
+    hybrid_search.add_to_bm25(records)
+    return doc_id
+
+
 def ingest_paper(pdf_path: str, source_id: str) -> None:
     text = parse_pdf(pdf_path)
     texts = chunk(text)
     records = _make_chunk_records(
         texts,
-        metadata={"source_type": "paper", "source_id": source_id, "url": pdf_path},
+        metadata={"source_type": "paper", "source_id": source_id, "document_id": source_id, "url": pdf_path},
     )
     get_vector_store().add(records)
     hybrid_search.add_to_bm25(records)
@@ -105,7 +176,8 @@ def ingest_domain_doc(path: str, project_id: str) -> None:
     texts = chunk(text)
     records = _make_chunk_records(
         texts,
-        metadata={"source_type": "domain_doc", "project_id": project_id, "url": path},
+        metadata={"source_type": "domain_doc", "project_id": project_id, "document_id": project_id, "url": path},
     )
     get_vector_store().add(records)
     hybrid_search.add_to_bm25(records)
+

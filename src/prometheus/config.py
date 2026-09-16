@@ -20,7 +20,7 @@ load_dotenv()
 class Settings:
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     openrouter_base_url: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 
     langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "prometheus")
     langsmith_tracing: bool = os.getenv("LANGSMITH_TRACING", "true").lower() == "true"
