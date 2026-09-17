@@ -101,14 +101,14 @@ def build_academic_context(
     academic_sources: list[AcademicSourceRecord] = []
 
     for idx, paper in enumerate(records):
-        label = _ACADEMIC_LABELS[idx] if idx < len(_ACADEMIC_LABELS) else f"Ref-{idx + 1}"
+        label = f"[{_ACADEMIC_LABELS[idx]}]" if idx < len(_ACADEMIC_LABELS) else f"[Ref-{idx + 1}]"
         authors_str = ", ".join(paper.authors) if paper.authors else "Unknown Authors"
         year_str = str(paper.year) if paper.year is not None else "n.d."
         doi_or_url = paper.doi or paper.url or "N/A"
         abstract_text = paper.abstract.strip() if paper.abstract and paper.abstract.strip() else "No abstract provided."
 
         header = (
-            f"[{label}] Paper: \"{paper.title}\"\n"
+            f"{label} Paper: \"{paper.title}\"\n"
             f"    Authors: {authors_str} ({year_str})\n"
             f"    DOI / Link: {doi_or_url} [OpenAlex ID: {paper.source_id}]"
         )
