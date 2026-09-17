@@ -129,6 +129,7 @@ def run_user_documents_qa(
     top_k: int = 5,
     force_live: bool = False,
     force_mock: bool = False,
+    include_academic: bool = False,
 ) -> int:
     """Ingest user-supplied files (.pdf, .docx, .pptx, .txt) and answer questions."""
     print("=" * 72)
@@ -141,6 +142,7 @@ def run_user_documents_qa(
     print(f"Target Model       : {model}")
     print(f"API Key Status     : {mask_key(api_key)}")
     print(f"Active LLM Backend : {'Live OpenRouter (' + model + ')' if is_live else 'Deterministic MockLLMClient'}")
+    print(f"Academic Literature: {'Enabled (OpenAlex)' if include_academic else 'Disabled (Local PDF evidence only)'}")
 
     # Ingest each provided file
     ingested_docs: list[dict[str, str]] = []
@@ -200,8 +202,13 @@ def run_user_documents_qa(
 
     print(f"\n[Query Scope] {scope_label}")
 
-    def execute_query(q_text: str) -> None:
+    def execute_query(q_text: str, override_academic: bool | None = None) -> None:
+        use_academic = include_academic if override_academic is None else override_academic
         print(f"\nQuestion: '{q_text}'")
+        if use_academic:
+            print("Mode: Combining local document evidence + external OpenAlex academic literature...")
+        else:
+            print("Mode: Local document evidence only (academic evidence disabled)...")
         print("Retrieving candidates, reranking, and generating grounded response...")
 
         result = query_rag(
@@ -209,6 +216,7 @@ def run_user_documents_qa(
             document_id=effective_doc_id,
             top_k=top_k,
             llm_client=llm_client,
+            include_academic_evidence=use_academic,
         )
         display_rag_results(result, document_scope=effective_doc_id)
 
@@ -219,7 +227,8 @@ def run_user_documents_qa(
 
     # Otherwise enter interactive Q&A loop
     print("\nEntering Interactive Question-Answering mode.")
-    print("Type your question and press Enter. Type 'q', 'exit', or 'quit' to exit.")
+    print("Type your question and press Enter. Prefix with '/academic <q>' for academic evidence.")
+    print("Type 'q', 'exit', or 'quit' to exit.")
 
     while True:
         try:
@@ -234,7 +243,13 @@ def run_user_documents_qa(
             print("Session ended.")
             break
 
-        execute_query(user_input)
+        acad_override = None
+        actual_q = user_input
+        if user_input.startswith("/academic "):
+            acad_override = True
+            actual_q = user_input[len("/academic "):].strip()
+
+        execute_query(actual_q, override_academic=acad_override)
 
     return 0
 
@@ -425,6 +440,11 @@ def main() -> int:
         help="Number of candidate evidence chunks to consider (default: 5).",
     )
     parser.add_argument(
+        "--academic",
+        action="store_true",
+        help="Include lightweight external academic evidence from OpenAlex.",
+    )
+    parser.add_argument(
         "--live",
         action="store_true",
         help="Force live OpenRouter Gemini generation.",
@@ -445,6 +465,7 @@ def main() -> int:
             top_k=args.top_k,
             force_live=args.live,
             force_mock=args.mock,
+            include_academic=args.academic,
         )
     else:
         return run_e2e_demo(force_live=args.live, force_mock=args.mock)

@@ -5,6 +5,8 @@ GET https://api.openalex.org/works?search=...&mailto=<settings.OPENALEX_MAILTO>
 """
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from prometheus.config import settings
@@ -14,7 +16,12 @@ OPENALEX_API_URL = "https://api.openalex.org/works"
 
 
 def search_openalex(query: str, max_results: int = 20) -> list[PaperRecord]:
-    params = {"search": query, "per_page": max_results}
+    clean_query = re.sub(r"[?*+\[\]{}\\^~:|]", " ", query or "").strip()
+    clean_query = re.sub(r"\s+", " ", clean_query)
+    if not clean_query:
+        return []
+
+    params = {"search": clean_query, "per_page": max_results}
     if settings.OPENALEX_MAILTO:
         params["mailto"] = settings.OPENALEX_MAILTO
 
