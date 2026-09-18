@@ -36,6 +36,11 @@ class Settings:
 
     vector_db_backend: str = os.getenv("VECTOR_DB_BACKEND", "chroma")
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_data")
+    # If set (e.g. "localhost:8001"), connects to a `chroma run` server
+    # instead of the embedded single-process PersistentClient -- required
+    # once more than one process (API + Celery worker(s)) touches the store
+    # concurrently. See vector_store.ChromaVectorStore's docstring.
+    chroma_server_url: str = os.getenv("CHROMA_SERVER_URL", "")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
 
@@ -103,6 +108,10 @@ class Settings:
     @property
     def CHROMA_PERSIST_DIR(self) -> str:
         return self.chroma_persist_dir
+
+    @property
+    def CHROMA_SERVER_URL(self) -> str:
+        return self.chroma_server_url
 
     @property
     def QDRANT_URL(self) -> str:

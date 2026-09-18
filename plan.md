@@ -68,21 +68,15 @@ CLI upload → async status transition to READY → chunk confirmed retrievable
 via `hybrid_search` with correct `document_id`/`project_id` metadata.
 Tests use Celery's `task_always_eager` (no broker needed).
 
-**Known issue found live, partially mitigated**: ChromaDB's embedded
-`PersistentClient` is single-process by design. Celery's default worker pool
-runs multiple concurrent processes (prefork), and two documents processed at
-the same moment in different worker processes can collide with a
-`"readonly database"` / `"database is locked"` error from Chroma's storage
-engine. `process_document` now detects this specific error and retries (up
-to 4x, 5/10/15/20s backoff) instead of failing the document outright — this
-handles the common case where the other writer finishes quickly. It does
-**not** fully solve the underlying architectural issue: under sustained
-concurrent load, retries could still exhaust. Proper fix is one of (a) run
-Chroma as a server (`chroma run`) and switch to `HttpClient`, which is
-designed for multi-process access, or (b) pin the document-processing worker
-to a single process (`celery ... --concurrency=1` or `--pool=solo`).
-Deferred for now since single-user local dev rarely triggers true
-concurrent writes.
+**Known issue found live, later fixed properly (see Phase 17 notes below)**:
+ChromaDB's embedded `PersistentClient` is single-process by design. Celery's
+default worker pool runs multiple concurrent processes (prefork), and two
+documents processed at the same moment in different worker processes can
+collide with a `"readonly database"` / `"database is locked"` error from
+Chroma's storage engine. `process_document` detects this specific error and
+retries (up to 4x, 5/10/15/20s backoff) as a stopgap. The actual fix --
+running Chroma as a server -- landed once this started blocking real usage;
+see Phase 17.
 
 ## Phase 5 — ChromaDB ✅
 
@@ -205,9 +199,32 @@ by restarting the server after out-of-process writes, not a product bug).
 - [x] Verified live end-to-end: real curl against a real running server, real OpenRouter model, correct SSE framing, correct event sequence (`agent_started` → `tool_started` → `tool_finished` → `citation` → `token`×N → `agent_finished`), real token-by-token streaming
 - [x] Test uses the scripted (non-streaming) fake model specifically to exercise the `on_chat_model_end` fallback path, not just the happy path
 
-## Phase 17 — React frontend ⬜
+## Phase 17 — React frontend 🚧 (in progress)
 
-- [ ] Not started. Begins only once the CLI + backend definition-of-done criteria are met.
+- [x] React + Vite + TypeScript + Tailwind v4, minimal ChatGPT/Gemini-style layout: sidebar (projects, documents, upload) + main chat pane
+- [x] Consumes the real `/api/v1` backend: project CRUD, document upload/list/delete, and chat via the real SSE stream (not polling) -- `token` events render incrementally with a blinking cursor, `tool_started` events show as "Searching your documents...", `citation` events render as document/web chips, markdown (incl. code blocks) via `react-markdown`
+- [x] Verified visually with real Playwright + Chrome screenshots against the real backend (not just `npm run build` type-checking) at every stage: empty state, project creation, document upload/processing, and a full streamed answer with a correct inline-code render and citation chip
+- [ ] Dark mode, mobile layout, and conversation-history persistence across page reloads not yet verified/built (chat state is in-memory per session, same limitation as the CLI/API's `ChatSession`)
+
+**Real bugs found building this:**
+- File uploads silently swallowed fetch/load errors (`.catch(() => {})`), so a genuine backend outage looked identical to "no projects yet." Added a visible error state with retry.
+- `agent_finished`'s answer text could be clobbered to `undefined` by a falsy-but-present event field (`text: event.answer || undefined` inside an object spread) -- fixed to only override when there's an actual new value.
+
+**Bigger issue surfaced by real usage, not testing**: running the frontend
+against the backend for actual back-to-back document uploads and chats (API
+server + Celery worker pool + `uvicorn --reload`'s extra process, all
+touching the same embedded Chroma store) reliably produced
+`"Error finding id"` / `"Nothing found on disk"` errors -- the single-process
+limitation noted in Phase 4 stopped being a rare edge case and started
+actively blocking use. Fixed for real this time: `ChromaVectorStore` now
+supports `CHROMA_SERVER_URL` to connect to a `chroma run` server
+(`HttpClient`) instead of the embedded `PersistentClient`, which is what
+should back any setup with more than one process. Verified live: existing
+data in `./chroma_data` was readable unchanged after switching, and a fresh
+upload processed correctly with the full multi-process setup (server + API
++ 11-process Celery pool) running at once -- the exact scenario that broke
+before. See `SETUP.md` for the updated setup order (Chroma server is now
+step 2, before the worker).
 
 ---
 

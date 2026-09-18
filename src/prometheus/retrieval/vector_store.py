@@ -35,10 +35,23 @@ class VectorStore(Protocol):
 
 
 class ChromaVectorStore:
-    """chunks: [{id, text, embedding, metadata: {source_type, source_id, url, project_id, ingested_at, ...}}]"""
+    """chunks: [{id, text, embedding, metadata: {source_type, source_id, url, project_id, ingested_at, ...}}]
 
-    def __init__(self, persist_dir: str) -> None:
-        self._client = chromadb.PersistentClient(path=persist_dir)
+    Chroma's embedded PersistentClient is single-process by design --
+    concurrent processes (a Celery prefork pool, `uvicorn --reload`'s worker,
+    a one-off script) opening the same persist_dir at once can corrupt or
+    error out ("readonly database", "Nothing found on disk", "Error finding
+    id"). If `server_url` is set, this connects to a real `chroma run`
+    server instead (HttpClient), which is safe for concurrent access;
+    PersistentClient remains the zero-infra default for solo local dev.
+    """
+
+    def __init__(self, persist_dir: str, server_url: str | None = None) -> None:
+        if server_url:
+            host, _, port = server_url.partition(":")
+            self._client = chromadb.HttpClient(host=host or "localhost", port=int(port or 8000))
+        else:
+            self._client = chromadb.PersistentClient(path=persist_dir)
         self._collection = self._client.get_or_create_collection(_COLLECTION_NAME)
 
     def add(self, chunks: list[dict]) -> None:
@@ -93,7 +106,7 @@ def get_vector_store() -> VectorStore:
         return _vector_store
 
     if settings.VECTOR_DB_BACKEND == "chroma":
-        _vector_store = ChromaVectorStore(settings.CHROMA_PERSIST_DIR)
+        _vector_store = ChromaVectorStore(settings.CHROMA_PERSIST_DIR, server_url=settings.CHROMA_SERVER_URL or None)
     elif settings.VECTOR_DB_BACKEND == "qdrant":
         raise NotImplementedError("Qdrant backend not implemented yet; set VECTOR_DB_BACKEND=chroma")
     else:
