@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from prometheus.api.routes import chat, documents, projects, search
 from prometheus.rag.models import RagQueryRequest, RagResult
 from prometheus.rag.pipeline import query_rag
 from prometheus.retrieval.ingestion import ingest_document
@@ -29,6 +30,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Versioned workspace API (new-plan.md section 50): projects/documents/search/
+# chat, backed by the same services the CLI uses. Kept separate from the
+# /api/rag/* endpoints below, which predate the workspace model and serve the
+# original single-document RAG feature -- left as-is, not migrated.
+for router in (projects.router, documents.router, search.router, chat.router):
+    app.include_router(router, prefix="/api/v1")
 
 
 @app.get("/api/rag/health")

@@ -16,10 +16,22 @@ from prometheus.config import settings
 _COLLECTION_NAME = "prometheus_chunks"
 
 
+def _build_where(filters: dict | None) -> dict | None:
+    """ChromaDB requires a `where` dict to have exactly one top-level key --
+    multiple equality filters (e.g. project_id + document_id) must be
+    combined with an explicit $and."""
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters
+    return {"$and": [{key: value} for key, value in filters.items()]}
+
+
 class VectorStore(Protocol):
     def add(self, chunks: list[dict]) -> None: ...
     def query(self, embedding: list[float], top_k: int, filters: dict | None = None) -> list[dict]: ...
     def delete(self, ids: list[str]) -> None: ...
+    def delete_by_metadata(self, filters: dict) -> None: ...
 
 
 class ChromaVectorStore:
@@ -43,7 +55,7 @@ class ChromaVectorStore:
         result = self._collection.query(
             query_embeddings=[embedding],
             n_results=top_k,
-            where=filters or None,
+            where=_build_where(filters),
         )
         hits = []
         ids = result.get("ids") or [[]]
@@ -64,6 +76,11 @@ class ChromaVectorStore:
     def delete(self, ids: list[str]) -> None:
         if ids:
             self._collection.delete(ids=ids)
+
+    def delete_by_metadata(self, filters: dict) -> None:
+        where = _build_where(filters)
+        if where:
+            self._collection.delete(where=where)
 
 
 _vector_store: VectorStore | None = None

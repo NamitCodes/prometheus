@@ -50,6 +50,37 @@ def add_to_bm25(chunks: list[dict]) -> None:
             f.write("\n")
 
 
+def remove_from_bm25(document_id: str) -> None:
+    """Rewrites the JSONL corpus without entries for `document_id` (used when a
+    document is deleted, so stale chunks don't linger in search results)."""
+    remove_from_bm25_by_metadata({"document_id": document_id})
+
+
+def remove_from_bm25_by_metadata(filters: dict) -> None:
+    """Rewrites the JSONL corpus without entries matching every key/value in
+    `filters` -- e.g. {"project_id": ...} to purge an entire deleted project,
+    including web-crawled chunks that have no owning Document row to loop
+    over individually."""
+    if not filters:
+        return
+    path = _bm25_index_path()
+    if not path.exists():
+        return
+
+    kept_lines = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            record = json.loads(stripped)
+            metadata = record.get("metadata", {})
+            if not all(metadata.get(key) == value for key, value in filters.items()):
+                kept_lines.append(stripped)
+
+    path.write_text("\n".join(kept_lines) + ("\n" if kept_lines else ""), encoding="utf-8")
+
+
 def _load_bm25_corpus() -> list[dict]:
     """Load BM25 corpus from disk, deduplicating by (document_id, chunk_index).
 

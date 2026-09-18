@@ -91,21 +91,54 @@ def _make_chunk_records(texts: list[str], metadata: dict) -> list[dict]:
 
 
 def chunk_sections(sections: list[Any], size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[dict]:
-    """Chunk a sequence of DocumentSections, preserving location metadata (page/slide numbers)."""
+    """Packs consecutive DocumentSections into ~`size`-char chunks (mirrors
+    chunk()'s paragraph-packing, but across section boundaries).
+
+    Parsers emit one section per PDF text block/paragraph, which is often far
+    smaller than `size` -- a heading, a single figure caption, an address, an
+    "Acknowledgements:" label. Chunking each section in isolation turned every
+    one of those into its own noisy, near-contentless search result (e.g. a
+    "One Sentence Summary:" heading split apart from the sentence that follows
+    it). Packing them together keeps that context intact.
+    """
     chunk_dicts: list[dict] = []
+    current_text = ""
+    current_meta: dict | None = None
+
+    def _meta_for(section: Any) -> dict:
+        return {
+            "page_number": getattr(section, "page_number", None),
+            "slide_number": getattr(section, "slide_number", None),
+            "heading": getattr(section, "heading", None),
+            "section_type": getattr(section, "section_type", "text"),
+        }
+
+    def _flush() -> None:
+        if current_text.strip():
+            chunk_dicts.append({"text": current_text.strip(), **current_meta})
+
     for section in sections:
         text = section.text.strip()
         if not text:
             continue
-        text_chunks = chunk(text, size=size, overlap=overlap)
-        for t in text_chunks:
-            meta = {
-                "page_number": getattr(section, "page_number", None),
-                "slide_number": getattr(section, "slide_number", None),
-                "heading": getattr(section, "heading", None),
-                "section_type": getattr(section, "section_type", "text"),
-            }
-            chunk_dicts.append({"text": t, **meta})
+        meta = _meta_for(section)
+
+        if len(text) > size:
+            _flush()
+            current_text, current_meta = "", None
+            for t in chunk(text, size=size, overlap=overlap):
+                chunk_dicts.append({"text": t, **meta})
+            continue
+
+        candidate = f"{current_text}\n\n{text}" if current_text else text
+        if len(candidate) <= size:
+            current_text = candidate
+            current_meta = current_meta or meta
+        else:
+            _flush()
+            current_text, current_meta = text, meta
+
+    _flush()
     return chunk_dicts
 
 
@@ -157,6 +190,34 @@ def ingest_document(
 
     get_vector_store().add(records)
     hybrid_search.add_to_bm25(records)
+    return doc_id
+
+
+def ingest_web_page(
+    url: str,
+    title: str,
+    text: str,
+    document_id: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """Index already-fetched web page text directly (new-plan.md section 32:
+    a crawled page is just another knowledge source) -- no file to parse,
+    unlike ingest_document."""
+    doc_id = document_id or str(uuid.uuid4())
+    texts = chunk(text)
+    if texts:
+        records = _make_chunk_records(
+            texts,
+            metadata={
+                "source_type": "web_page",
+                "document_id": doc_id,
+                "url": url,
+                "title": title,
+                **(metadata or {}),
+            },
+        )
+        get_vector_store().add(records)
+        hybrid_search.add_to_bm25(records)
     return doc_id
 
 

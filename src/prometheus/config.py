@@ -15,6 +15,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# LangChain/LangGraph read LANGCHAIN_TRACING_V2 / LANGSMITH_TRACING directly
+# from the environment, independent of our Settings object below. Tracing
+# with no API key just fails loudly on every LLM call (401s to LangSmith),
+# so force it off here rather than relying on every .env to get this right.
+if not os.getenv("LANGSMITH_API_KEY"):
+    os.environ["LANGSMITH_TRACING"] = "false"
+    os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -33,8 +41,33 @@ class Settings:
 
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./findings.db")
 
+    # Application database: projects/documents/conversations (new-plan.md workspace
+    # model). Deliberately separate from DATABASE_URL/findings.db, which holds the
+    # older Prometheus reasoning-chain reports -- kept apart until that overlap
+    # gets resolved.
+    app_database_url: str = os.getenv("APP_DATABASE_URL", "sqlite+aiosqlite:///./data/app.db")
+
+    # Local object storage for uploaded documents (new-plan.md section 33).
+    document_storage_dir: str = os.getenv("DOCUMENT_STORAGE_DIR", "./data/documents")
+    max_upload_size_mb: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+
+    # Celery + Redis: background document processing (new-plan.md section 30).
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    # Runs Celery tasks synchronously in-process instead of via a worker+broker.
+    # Tests flip this on directly; not meant to be set via env in normal use.
+    celery_task_always_eager: bool = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+
     semantic_scholar_api_key: str = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "")
     openalex_mailto: str = os.getenv("OPENALEX_MAILTO", "")
+
+    # Web access (new-plan.md Phase 11). Provider is DuckDuckGo (via `ddgs`,
+    # unofficial/scraped) for now -- swap for Brave Search once available,
+    # see plan.md.
+    web_search_max_results: int = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+    web_fetch_timeout_seconds: float = float(os.getenv("WEB_FETCH_TIMEOUT_SECONDS", "10"))
+    web_fetch_max_bytes: int = int(os.getenv("WEB_FETCH_MAX_BYTES", str(2 * 1024 * 1024)))
+    web_crawl_max_pages: int = int(os.getenv("WEB_CRAWL_MAX_PAGES", "10"))
+    web_crawl_max_depth: int = int(os.getenv("WEB_CRAWL_MAX_DEPTH", "2"))
 
     mcp_server_port: int = int(os.getenv("MCP_SERVER_PORT", "8765"))
 
@@ -82,6 +115,22 @@ class Settings:
     @property
     def DATABASE_URL(self) -> str:
         return self.database_url
+
+    @property
+    def APP_DATABASE_URL(self) -> str:
+        return self.app_database_url
+
+    @property
+    def DOCUMENT_STORAGE_DIR(self) -> str:
+        return self.document_storage_dir
+
+    @property
+    def MAX_UPLOAD_SIZE_MB(self) -> int:
+        return self.max_upload_size_mb
+
+    @property
+    def REDIS_URL(self) -> str:
+        return self.redis_url
 
     @property
     def SEMANTIC_SCHOLAR_API_KEY(self) -> str:

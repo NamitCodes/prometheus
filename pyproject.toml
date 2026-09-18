@@ -25,8 +25,18 @@ dependencies = [
     "uvicorn>=0.30",
     "python-docx>=1.1",
     "python-pptx>=1.0",
+    "typer>=0.12",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "celery>=5.4",
+    "redis>=5.0",
+    "ddgs>=9.0",
+    "beautifulsoup4>=4.12",
 
 ]
+
+[project.scripts]
+research = "prometheus.cli.main:app"
 
 [dependency-groups]
 dev = [
